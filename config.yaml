@@ -1,0 +1,45 @@
+csp_url: https://env-2a.test.infoblox.com
+csp_token: cc58779b9b4df56073d7c85f847ab093ffd69ea5567387885008a62f2bd13c83
+test_wait_duration: 5s
+dras_ip: 10.70.0.1
+ec2_config:
+  dry_run: false
+  # num_instances: 1
+  region: "ap-south-1"
+  image_id: "ami-0c2af51e265bd5e0e"
+  instance_type: "t2.micro"
+  key_name: "lingesh-eng-dev" # Name of keypair
+  subnet_id: "subnet-09d5ac6b3dc137b49"
+  security_group_ids:
+    - "sg-06f930923d186144d"
+  user_data: |-
+    #!/bin/bash
+    docker run -e REMOTE_IP={{.RemoteIP}} -e PSK={{.PSK}} -e LEFT_ID={{.LeftID}} -e MANAGED_IP={{.ManagedIP}} -e CONNECTION_NAME=blr --name ipsec -d --privileged -v /lib/modules:/lib/modules infobloxcto/atlas.tap:ipsec-dras-py
+credential:
+  name: gk-automation
+  source_id: psk
+  active: true
+  key_type: psk
+  key_data:
+    psk: test123
+universal_service:
+  name: gk-1
+  description: "DEPLOY"
+  capabilities:
+    - type: dns
+    - type: dhcp
+endpoint:
+  name: gk-automation
+  service_ip: 10.200.12.46
+  service_location: "AWS US (N. Virginia)"
+  size: S
+  num_locations_to_generate: 25
+  access_locations:
+    - description: description
+      tags:
+        key: "true"
+      wan_ip_addresses:
+        - 110.11.10.10
+        - 110.12.12.1
+      lan_subnets:
+        # - 255.255.255.0/16
