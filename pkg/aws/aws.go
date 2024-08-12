@@ -179,7 +179,7 @@ func (a *AWS) AllocateIPAddress() (*string, error) {
 		return nil, err
 	}
 
-	log.Infof("successfully allocated IP address: %s", *allocRes.AllocationId)
+	log.Infof("successfully allocated IP address: %s", *allocRes.PublicIp)
 	return allocRes.AllocationId, nil
 }
 

@@ -72,9 +72,9 @@ func init() {
 
 func main() {
 	var (
-		testData = initTestData()
-		c        = csp.New(testData.CSPURL, testData.CSPToken)
-		a        = awspkg.New(
+		testData  = initTestData()
+		cspClient = csp.New(testData.CSPURL, testData.CSPToken)
+		awsClient = awspkg.New(
 			awspkg.WithDryRun(testData.EC2Config.DryRun),
 			awspkg.WithRegion(testData.EC2Config.Region),
 			awspkg.WithImageID(testData.EC2Config.ImageID),
@@ -87,7 +87,7 @@ func main() {
 	)
 
 	// Create Credential
-	credentialResp, err := c.CreateCredential(
+	credentialResp, err := cspClient.CreateCredential(
 		testData.Credential,
 	)
 	if err != nil {
@@ -100,7 +100,7 @@ func main() {
 	// Deferred Delete of Credential
 	if cleanupCSPResources {
 		defer func(credentialID string) {
-			err := c.DeleteCredential(credentialID)
+			err := cspClient.DeleteCredential(credentialID)
 			if err != nil {
 				log.WithError(err).Errorf("failed to delete credential: %s", credentialID)
 			} else {
@@ -111,7 +111,7 @@ func main() {
 	}
 
 	// Create UniversalService
-	universalServiceResp, err := c.CreateUniversalService(
+	universalServiceResp, err := cspClient.CreateUniversalService(
 		testData.UniversalService,
 	)
 	if err != nil {
@@ -126,7 +126,7 @@ func main() {
 	// Deferred Delete of UniversalService
 	if cleanupCSPResources {
 		defer func(universalServiceID string) {
-			err := c.DeleteUniversalService(universalServiceID)
+			err := cspClient.DeleteUniversalService(universalServiceID)
 			if err != nil {
 				log.WithError(err).Errorf("failed to delete universalService: %s", universalServiceID)
 			} else {
@@ -136,7 +136,7 @@ func main() {
 	}
 
 	// Create Endpoint
-	endpointResp, err := c.CreateEndpoint(
+	endpointResp, err := cspClient.CreateEndpoint(
 		&csp.Endpoint{
 			Name:               testData.Endpoint.Name,
 			ServiceIP:          testData.Endpoint.ServiceIP,
@@ -157,7 +157,7 @@ func main() {
 	// Deferred Delete of Endpoint
 	if cleanupCSPResources {
 		defer func(endpointID string) {
-			err := c.DeleteEndpoint(endpointID)
+			err := cspClient.DeleteEndpoint(endpointID)
 			if err != nil {
 				log.WithError(err).Errorf("failed to delete endpoint: %s", endpointID)
 			} else {
@@ -170,7 +170,7 @@ func main() {
 	// Create Locations
 	locationIDs := make([]string, 0, testData.Endpoint.NumLocationsToGenerate)
 	for i := 0; i < testData.Endpoint.NumLocationsToGenerate; i++ {
-		locationResp, err := c.CreateLocation(
+		locationResp, err := cspClient.CreateLocation(
 			&csp.Location{
 				Name:      uuid.NewString(),
 				Latitude:  "39.7837304",
@@ -193,7 +193,7 @@ func main() {
 		// Deferred Delete of Location
 		if cleanupCSPResources {
 			defer func(locationID string) {
-				err := c.DeleteLocation(locationID)
+				err := cspClient.DeleteLocation(locationID)
 				if err != nil {
 					log.WithError(err).Errorf("failed to delete location: %s", locationID)
 				} else {
@@ -207,7 +207,7 @@ func main() {
 	// Create AccessLocations
 	for _, locationID := range locationIDs {
 		for _, accessLocation := range testData.Endpoint.AccessLocations {
-			accessLocationResp, err := c.CreateAccessLocation(
+			accessLocationResp, err := cspClient.CreateAccessLocation(
 				&csp.AccessLocation{
 					LocationID:     locationID,
 					CredentialID:   testData.Credential.ID,
@@ -238,8 +238,8 @@ func main() {
 				&wg,
 				locationID,
 				testData,
-				c,
-				a,
+				cspClient,
+				awsClient,
 				*accessLocation,
 				accessLocationResp.Result.Identity,
 				endpointResp,
@@ -253,7 +253,7 @@ func main() {
 	time.Sleep(testData.TestWaitDuration)
 	log.Info("test duration completed, cleaning up resources")
 
-	cleanup(c, a, d)
+	cleanup(cspClient, awsClient, d)
 }
 
 func initTestData() *TestData {
