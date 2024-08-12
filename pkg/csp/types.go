@@ -65,6 +65,7 @@ type AccessLocation struct {
 	Tags           map[string]string `yaml:"tags,omitempty" json:"tags,omitempty"`
 	WANIPAddresses []string          `yaml:"wan_ip_addresses,omitempty" json:"wan_ip_addresses,omitempty"`
 	LANSubnets     []string          `yaml:"lan_subnets,omitempty" json:"lan_subnets,omitempty"`
+	Identity       string            `yaml:"identity,omitempty" json:"identity,omitempty"`
 }
 
 type CredentialResponse struct {

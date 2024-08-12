@@ -15,7 +15,6 @@ import (
 	awspkg "github.com/gouthamkn/loadsimulator/pkg/aws"
 	"github.com/gouthamkn/loadsimulator/pkg/csp"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -56,22 +55,23 @@ func init() {
 	flag.BoolVar(&cleanupCSPResources, "cleanup-csp-resources", true, "Cleanup CSP resources upon script execution")
 	flag.Parse()
 
-	log.New()
+	logrus.New()
 
-	level, err := log.ParseLevel(logLevel)
+	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {
-		log.WithError(err).Info("Invalid log level specified")
+		logrus.WithError(err).Info("Invalid log level specified")
 
 	}
 
-	log.SetLevel(level)
-	log.SetFormatter(&log.TextFormatter{
+	logrus.SetLevel(level)
+	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
 	})
 }
 
 func main() {
 	var (
+		log       = logrus.New()
 		testData  = initTestData()
 		cspClient = csp.New(testData.CSPURL, testData.CSPToken)
 		awsClient = awspkg.New(
@@ -203,7 +203,7 @@ func main() {
 		}
 	}
 
-	d := make([]deferedFunc, 0)
+	locationsToAccessLocationsMap := make(map[string][]*csp.AccessLocation)
 	// Create AccessLocations
 	for _, locationID := range locationIDs {
 		for _, accessLocation := range testData.Endpoint.AccessLocations {
@@ -222,27 +222,40 @@ func main() {
 				return
 			}
 
-			accessLocationID := strings.Split(accessLocationResp.Result.ID, "/")
+			accessLocation.Identity = accessLocationResp.Result.Identity
 
+			accessLocationID := strings.Split(accessLocationResp.Result.ID, "/")
 			accessLocation.ID = accessLocationID[len(accessLocationID)-1]
 			log.Infof("successfully created accessLocation with ID: %s", accessLocation.ID)
 
+			locationsToAccessLocationsMap[locationID] = append(locationsToAccessLocationsMap[locationID], accessLocation)
+
 			// Deferred Delete of AccessLocation
 			if cleanupCSPResources {
-				d = append(d, deferedFunc{entityType: deferedEntity_AccessLocation, entityValue: accessLocation.ID})
+				go func(accessLocationID string) {
+					err := cspClient.DeleteAccessLocation(accessLocationID)
+					if err != nil {
+						log.WithError(err).Errorf("failed to delete accessLocation: %s", accessLocationID)
+					} else {
+						log.Infof("successfully deleted accessLocation: %s", accessLocationID)
+					}
+				}(accessLocation.ID)
 			}
+		}
+	}
 
-			wg.Add(1)
-			go createAccessLocationAndAssociateEC2Instance(
+	d := make([]deferedFunc, 0)
+	for locationID, accessLocations := range locationsToAccessLocationsMap {
+		for _, accessLocation := range accessLocations {
+			go createEC2Instance(
 				log.WithField("request_id", uuid.New()),
 				&wg,
-				locationID,
 				testData,
 				cspClient,
 				awsClient,
-				*accessLocation,
-				accessLocationResp.Result.Identity,
 				endpointResp,
+				locationID,
+				*accessLocation,
 				&d,
 			)
 		}
@@ -261,33 +274,37 @@ func initTestData() *TestData {
 
 	yamlFile, err := os.ReadFile(configFilePath)
 	if err != nil {
-		log.WithError(err).Error("failed to read config file")
+		logrus.WithError(err).Error("failed to read config file")
 		os.Exit(1)
 	}
 
 	err = yaml.Unmarshal(yamlFile, testData)
 	if err != nil {
-		log.WithError(err).Error("Failed to unmarshal config file")
+		logrus.WithError(err).Error("Failed to unmarshal config file")
 		os.Exit(1)
 	}
 
-	log.Debug("successfully parsed config file")
+	logrus.Debug("successfully parsed config file")
 
 	return testData
 }
 
-func createAccessLocationAndAssociateEC2Instance(
+func createEC2Instance(
 	log *logrus.Entry,
 	wg *sync.WaitGroup,
-	locationID string,
 	testData *TestData,
-	c *csp.CSP,
-	a *awspkg.AWS,
-	accessLocation csp.AccessLocation,
-	accessLocationIdentity string,
+	cspClient *csp.CSP,
+	awsClient *awspkg.AWS,
 	endpointResp *csp.EndpointResponse,
+	locationID string,
+	accessLocation csp.AccessLocation,
 	deferedFuncs *[]deferedFunc,
 ) {
+	log = log.WithFields(logrus.Fields{
+		"location_id":        locationID,
+		"access_location_id": accessLocation.ID,
+	})
+
 	defer wg.Done()
 
 	// Template init
@@ -309,7 +326,7 @@ func createAccessLocationAndAssociateEC2Instance(
 		RemoteIP:  endpointResp.Result.CNames[0],
 		ManagedIP: endpointResp.Result.ServiceIP,
 		PSK:       testData.Credential.KeyData["psk"],
-		LeftID:    accessLocationIdentity,
+		LeftID:    accessLocation.Identity,
 		DrasIP:    testData.DrasIP,
 	}
 	err = userDataTemplate.Execute(&userData, data)
@@ -318,9 +335,9 @@ func createAccessLocationAndAssociateEC2Instance(
 		return
 	}
 
-	a.UserData = base64.StdEncoding.EncodeToString(userData.Bytes())
+	awsClient.UserData = base64.StdEncoding.EncodeToString(userData.Bytes())
 
-	ec2Instance, err := a.CreateEC2Instance()
+	ec2Instance, err := awsClient.CreateEC2Instance()
 	if err != nil {
 		return
 	}
@@ -331,7 +348,7 @@ func createAccessLocationAndAssociateEC2Instance(
 	}
 
 	// Allocate IP address
-	allocationID, err := a.AllocateIPAddress()
+	allocationID, err := awsClient.AllocateIPAddress()
 	if err != nil {
 		return
 	}
@@ -342,7 +359,7 @@ func createAccessLocationAndAssociateEC2Instance(
 	}
 
 	// Associate IP address with the instance
-	associationID, err := a.AssociateIPAddress(ec2Instance.InstanceId, allocationID)
+	associationID, err := awsClient.AssociateIPAddress(ec2Instance.InstanceId, allocationID)
 	if err != nil {
 		return
 	}
@@ -352,13 +369,13 @@ func createAccessLocationAndAssociateEC2Instance(
 		*deferedFuncs = append(*deferedFuncs, deferedFunc{entityType: deferedEntity_DisassociateIPAddress, entityValue: *associationID})
 	}
 
-	ec2Instance, err = a.GetInstance(*ec2Instance.InstanceId)
+	ec2Instance, err = awsClient.GetInstance(*ec2Instance.InstanceId)
 	if err != nil {
 		return
 	}
 
 	// Update the accessLocation with the publicIP address of the EC2 instance
-	_, err = c.UpdateAccessLocation(
+	_, err = cspClient.UpdateAccessLocation(
 		accessLocation.ID,
 		&csp.AccessLocation{
 			LocationID:     locationID,
@@ -371,9 +388,10 @@ func createAccessLocationAndAssociateEC2Instance(
 		},
 	)
 	if err != nil {
+		log.WithError(err).WithField("ec2_instance_id", ec2Instance.InstanceId).Errorf("failed to update accessLocation: %s", accessLocation.ID)
 		return
 	}
-	log.Info("successfully updated WAN IP Address in accessLocation")
+	log.Infof("successfully updated WAN IP Address in accessLocation: %s", accessLocation.ID)
 }
 
 type deferedEntity int
@@ -400,9 +418,9 @@ func cleanup(
 		case deferedEntity_AccessLocation:
 			err := c.DeleteAccessLocation(deferedFuncs[i].entityValue)
 			if err != nil {
-				log.WithError(err).Errorf("failed to delete accessLocation: %s", deferedFuncs[i].entityValue)
+				logrus.WithError(err).Errorf("failed to delete accessLocation: %s", deferedFuncs[i].entityValue)
 			} else {
-				log.Infof("successfully deleted accessLocation: %s", deferedFuncs[i].entityValue)
+				logrus.Infof("successfully deleted accessLocation: %s", deferedFuncs[i].entityValue)
 			}
 		case deferedEntity_TerminateEC2Instance:
 			a.TerminateEC2Instance(&deferedFuncs[i].entityValue)
@@ -411,7 +429,7 @@ func cleanup(
 		case deferedEntity_DisassociateIPAddress:
 			a.DisassociateIPAddress(&deferedFuncs[i].entityValue)
 		default:
-			log.Errorf("unknown entity type: %d", deferedFuncs[i].entityType)
+			logrus.Errorf("unknown entity type: %d", deferedFuncs[i].entityType)
 		}
 	}
 }
