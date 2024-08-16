@@ -153,6 +153,21 @@ func (c *CSP) CreateAccessLocation(accessLocation *AccessLocation) (*AccessLocat
 	return accessLocationResponse, nil
 }
 
+func (c *CSP) GetAccessLocation(accessLocationID string) (*AccessLocationResponse, error) {
+	respBytes, err := c.get(ObjectType_ACCESSLOCATION, accessLocationID)
+	if err != nil {
+		return nil, err
+	}
+
+	getAccessLocationResponse := new(AccessLocationResponse)
+	if err := json.Unmarshal(respBytes, getAccessLocationResponse); err != nil {
+		logrus.WithError(err).Errorf("failed to unmarshal getAccessLocationResponse: %s", accessLocationID)
+		return nil, err
+	}
+
+	return getAccessLocationResponse, nil
+}
+
 func (c *CSP) UpdateAccessLocation(accessLocationID string, accessLocation *AccessLocation) (*AccessLocationResponse, error) {
 	respBytes, err := c.update(ObjectType_ACCESSLOCATION, accessLocation, accessLocationID)
 	if err != nil {
@@ -203,6 +218,22 @@ func (c *CSP) update(objectType ObjectType, object any, objectID string) ([]byte
 	resp, err := c.doRequest(req)
 	if err != nil {
 		log.WithError(err).Errorf("failed to PUT request to update %s with ID %s", objectType, objectID)
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func (c *CSP) get(objectType ObjectType, objectID string) ([]byte, error) {
+	req, err := c.buildRequest(http.MethodGet, objectType, nil, objectID)
+	if err != nil {
+		log.WithError(err).Errorf("failed to build request to get %s with ID %s", objectType, objectID)
+		return nil, err
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		log.WithError(err).Errorf("failed to GET %s with ID %s", objectType, objectID)
 		return nil, err
 	}
 

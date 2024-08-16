@@ -203,7 +203,7 @@ func main() {
 		}
 	}
 
-	locationsToAccessLocationsMap := make(map[string][]*csp.AccessLocation)
+	accessLocations := make([]*csp.AccessLocation, 0)
 	// Create AccessLocations
 	for _, locationID := range locationIDs {
 		for _, accessLocation := range testData.Endpoint.AccessLocations {
@@ -228,7 +228,7 @@ func main() {
 			accessLocation.ID = accessLocationID[len(accessLocationID)-1]
 			log.Infof("successfully created accessLocation with ID: %s", accessLocation.ID)
 
-			locationsToAccessLocationsMap[locationID] = append(locationsToAccessLocationsMap[locationID], accessLocation)
+			accessLocations = append(accessLocations, accessLocation)
 
 			// Deferred Delete of AccessLocation
 			if cleanupCSPResources {
@@ -245,21 +245,18 @@ func main() {
 	}
 
 	d := make([]deferedFunc, 0)
-	for locationID, accessLocations := range locationsToAccessLocationsMap {
-		for _, accessLocation := range accessLocations {
-			wg.Add(1)
-			go createEC2Instance(
-				log.WithField("request_id", uuid.New()),
-				&wg,
-				testData,
-				cspClient,
-				awsClient,
-				endpointResp,
-				locationID,
-				*accessLocation,
-				&d,
-			)
-		}
+	for _, accessLocation := range accessLocations {
+		wg.Add(1)
+		go createEC2Instance(
+			log.WithField("request_id", uuid.New()),
+			&wg,
+			testData,
+			cspClient,
+			awsClient,
+			endpointResp,
+			*accessLocation,
+			&d,
+		)
 	}
 
 	wg.Wait()
@@ -297,12 +294,10 @@ func createEC2Instance(
 	cspClient *csp.CSP,
 	awsClient *awspkg.AWS,
 	endpointResp *csp.EndpointResponse,
-	locationID string,
 	accessLocation csp.AccessLocation,
 	deferedFuncs *[]deferedFunc,
 ) {
 	log = log.WithFields(logrus.Fields{
-		"location_id":        locationID,
 		"access_location_id": accessLocation.ID,
 	})
 
@@ -375,17 +370,21 @@ func createEC2Instance(
 		return
 	}
 
+	// Get the accessLocation
+	getAccessLocationResp, err := cspClient.GetAccessLocation(accessLocation.ID)
+	if err != nil {
+		log.WithError(err).WithField("access_location_id", accessLocation.ID).Error("failed to get accessLocation")
+	}
+
 	// Update the accessLocation with the publicIP address of the EC2 instance
 	_, err = cspClient.UpdateAccessLocation(
 		accessLocation.ID,
 		&csp.AccessLocation{
-			LocationID:     locationID,
+			LocationID:     getAccessLocationResp.Result.LocationID,
 			CredentialID:   testData.Credential.ID,
 			EndpointID:     testData.Endpoint.ID,
-			Description:    accessLocation.Description,
-			Tags:           accessLocation.Tags,
 			WANIPAddresses: []string{*ec2Instance.PublicIpAddress},
-			LANSubnets:     accessLocation.LANSubnets,
+			LANSubnets:     getAccessLocationResp.Result.LANSubnets,
 		},
 	)
 	if err != nil {
