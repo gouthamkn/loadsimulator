@@ -232,7 +232,7 @@ func main() {
 
 			// Deferred Delete of AccessLocation
 			if cleanupCSPResources {
-				go func(accessLocationID string) {
+				defer func(accessLocationID string) {
 					err := cspClient.DeleteAccessLocation(accessLocationID)
 					if err != nil {
 						log.WithError(err).Errorf("failed to delete accessLocation: %s", accessLocationID)
@@ -247,6 +247,7 @@ func main() {
 	d := make([]deferedFunc, 0)
 	for locationID, accessLocations := range locationsToAccessLocationsMap {
 		for _, accessLocation := range accessLocations {
+			wg.Add(1)
 			go createEC2Instance(
 				log.WithField("request_id", uuid.New()),
 				&wg,
