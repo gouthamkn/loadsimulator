@@ -203,7 +203,7 @@ func main() {
 		}
 	}
 
-	accessLocations := make([]*csp.AccessLocation, 0)
+	accessLocations := make([]csp.AccessLocationResult, 0)
 	// Create AccessLocations
 	for _, locationID := range locationIDs {
 		for _, accessLocation := range testData.Endpoint.AccessLocations {
@@ -225,10 +225,10 @@ func main() {
 			accessLocation.Identity = accessLocationResp.Result.Identity
 
 			accessLocationID := strings.Split(accessLocationResp.Result.ID, "/")
-			accessLocation.ID = accessLocationID[len(accessLocationID)-1]
-			log.Infof("successfully created accessLocation with ID: %s", accessLocation.ID)
+			accessLocationResp.Result.ID = accessLocationID[len(accessLocationID)-1]
+			log.Infof("successfully created accessLocation with ID: %s", accessLocationResp.Result.ID)
 
-			accessLocations = append(accessLocations, accessLocation)
+			accessLocations = append(accessLocations, accessLocationResp.Result)
 
 			// Deferred Delete of AccessLocation
 			if cleanupCSPResources {
@@ -239,7 +239,7 @@ func main() {
 					} else {
 						log.Infof("successfully deleted accessLocation: %s", accessLocationID)
 					}
-				}(accessLocation.ID)
+				}(accessLocationResp.Result.ID)
 			}
 		}
 	}
@@ -254,7 +254,7 @@ func main() {
 			cspClient,
 			awsClient,
 			endpointResp,
-			*accessLocation,
+			accessLocation,
 			&d,
 		)
 	}
@@ -294,7 +294,7 @@ func createEC2Instance(
 	cspClient *csp.CSP,
 	awsClient *awspkg.AWS,
 	endpointResp *csp.EndpointResponse,
-	accessLocation csp.AccessLocation,
+	accessLocation csp.AccessLocationResult,
 	deferedFuncs *[]deferedFunc,
 ) {
 	log = log.WithFields(logrus.Fields{
@@ -374,6 +374,7 @@ func createEC2Instance(
 	getAccessLocationResp, err := cspClient.GetAccessLocation(accessLocation.ID)
 	if err != nil {
 		log.WithError(err).WithField("access_location_id", accessLocation.ID).Error("failed to get accessLocation")
+		return
 	}
 
 	// Update the accessLocation with the publicIP address of the EC2 instance
@@ -391,7 +392,7 @@ func createEC2Instance(
 		log.WithError(err).WithField("ec2_instance_id", ec2Instance.InstanceId).Errorf("failed to update accessLocation: %s", accessLocation.ID)
 		return
 	}
-	log.Infof("successfully updated WAN IP Address in accessLocation: %s", accessLocation.ID)
+	log.Infof("successfully updated accessLocation: %s with WAN IP Address: %s", accessLocation.ID, *ec2Instance.PublicIpAddress)
 }
 
 type deferedEntity int
