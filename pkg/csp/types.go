@@ -40,6 +40,8 @@ type Endpoint struct {
 	NumLocationsToGenerate int               `yaml:"num_locations_to_generate,omitempty" json:"num_locations_to_generate,omitempty"`
 	Locations              []*Location       `yaml:"locations,omitempty" json:"location,omitempty"`
 	AccessLocations        []*AccessLocation `yaml:"access_locations,omitempty" json:"access_location,omitempty"`
+	NeighbourIPs           []string          `yaml:"neighbour_ips,omitempty" json:"neighbour_ips,omitempty"`
+	PreferredProvider      string            `yaml:"preferred_provider,omitempty" json:"preferred_provider,omitempty"`
 }
 
 type Location struct {
@@ -66,6 +68,7 @@ type AccessLocation struct {
 	WANIPAddresses []string          `yaml:"wan_ip_addresses,omitempty" json:"wan_ip_addresses,omitempty"`
 	LANSubnets     []string          `yaml:"lan_subnets,omitempty" json:"lan_subnets,omitempty"`
 	Identity       string            `yaml:"identity,omitempty" json:"identity,omitempty"`
+	IdentityType   string            `yaml:"identity_type,omitempty" json:"identity_type,omitempty"`
 }
 
 type CredentialResponse struct {

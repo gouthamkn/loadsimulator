@@ -1,5 +1,5 @@
 csp_url: https://env-2a.test.infoblox.com
-csp_token: cc58779b9b4df56073d7c85f847ab093ffd69ea5567387885008a62f2bd13c83
+csp_token: ""
 test_wait_duration: 5s
 dras_ip: 10.70.0.1
 ec2_config:
@@ -33,6 +33,10 @@ endpoint:
   service_ip: 10.200.12.46
   service_location: "AWS US (N. Virginia)"
   size: S
+  neighbour_ips:
+    - "192.168.121.1"
+    - "192.168.121.2"
+  preferred_provider: "Any"
   num_locations_to_generate: 25
   access_locations:
     - description: description
@@ -41,5 +45,6 @@ endpoint:
       wan_ip_addresses:
         - 110.11.10.10
         - 110.12.12.1
+      identity_type: "FQDN"
       lan_subnets:
         # - 255.255.255.0/16

@@ -143,6 +143,8 @@ func main() {
 			ServiceLocation:    testData.Endpoint.ServiceLocation,
 			Size:               testData.Endpoint.Size,
 			UniversalServiceID: testData.UniversalService.ID,
+			NeighbourIPs:       testData.Endpoint.NeighbourIPs,
+			PreferredProvider:  testData.Endpoint.PreferredProvider,
 		},
 	)
 	if err != nil {
@@ -216,6 +218,7 @@ func main() {
 					Tags:           accessLocation.Tags,
 					WANIPAddresses: accessLocation.WANIPAddresses,
 					LANSubnets:     accessLocation.LANSubnets,
+					IdentityType:   accessLocation.IdentityType,
 				},
 			)
 			if err != nil {
