@@ -55,7 +55,7 @@ type Location struct {
 
 type Address struct {
 	Country  string `yaml:"country,omitempty" json:"country,omitempty"`
-	PostCode string `yaml:"postCode,omitempty" json:"post_code,omitempty"`
+	PostCode string `yaml:"postCode,omitempty" json:"postal_code,omitempty"`
 }
 
 type AccessLocation struct {
